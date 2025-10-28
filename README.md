@@ -13,11 +13,17 @@ That’s why I use FreshSheet – Every cell gets a breath of fresh air.
 🔹 Key Features That Changed My Workflow:
 
 One‑Click Refresh: All report files updated instantly — no more opening each one manually.
+
 Smart File Order: Updates happen in a clear, numbered sequence.
+
 Progress Visibility: See exactly how far along the refresh is with a live bar and percentage.
+
 Saved File Groups: Keep “History” sets of your daily report files for quick reload tomorrow.
+
 Error Alerts: Get notified if a file is missing or fails to update.
+
 Streamlined Interface: Simple, modern, and built for speed.
+
 📊 The Impact:
 
 Daily report prep time cut by over 70%.
