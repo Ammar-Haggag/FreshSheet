@@ -1,0 +1,198 @@
+import tkinter as tk
+from tkinter import filedialog, messagebox
+from tkinter import ttk
+import xlwings as xw
+import os
+import json
+
+# ------------------ Color Palette ------------------
+BG_MAIN      = "#f4f6f8"
+BG_FRAME     = "#ffffff"
+BTN_PRIMARY  = "#0078d4"
+BTN_DANGER   = "#d83b01"
+BTN_SUCCESS  = "#107c10"
+TEXT_COLOR   = "#000000"
+
+HISTORY_FILE = "history.json"
+
+# ------------------ History Functions ------------------
+def load_all_history():
+    if os.path.exists(HISTORY_FILE):
+        try:
+            with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except json.JSONDecodeError:
+            return {}
+    return {}
+
+def save_all_history(history_data):
+    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+        json.dump(history_data, f, ensure_ascii=False, indent=2)
+
+def refresh_history_dropdown():
+    history_data = load_all_history()
+    history_var.set("")
+    history_dropdown["values"] = list(history_data.keys())
+
+def save_current_as_history():
+    files = list(file_list.get(0, tk.END))
+    if not files:
+        messagebox.showwarning("No Files", "Please select files first.")
+        return
+    name = history_name_entry.get().strip()
+    if not name:
+        messagebox.showwarning("No Name", "Please enter a name for this history set.")
+        return
+    history_data = load_all_history()
+    history_data[name] = files
+    save_all_history(history_data)
+    refresh_history_dropdown()
+    messagebox.showinfo("Saved", f"History set '{name}' saved.")
+
+def load_selected_history(*args):
+    name = history_var.get()
+    if not name:
+        return
+    history_data = load_all_history()
+    if name in history_data:
+        file_list.delete(0, tk.END)
+        for f in history_data[name]:
+            if os.path.exists(f):
+                file_list.insert(tk.END, f)
+            else:
+                messagebox.showwarning("Missing File", f"File not found: {f}")
+        renumber_files()
+
+def delete_selected_history():
+    name = history_var.get()
+    if not name:
+        messagebox.showwarning("No Selection", "Please select a history set to delete.")
+        return
+    history_data = load_all_history()
+    if name in history_data:
+        del history_data[name]
+        save_all_history(history_data)
+        refresh_history_dropdown()
+        messagebox.showinfo("Deleted", f"History set '{name}' deleted.")
+
+# ------------------ File Functions ------------------
+def renumber_files():
+    """Renumber files in the listbox to show order."""
+    files = [file_list.get(i) for i in range(file_list.size())]
+    file_list.delete(0, tk.END)
+    for idx, f in enumerate(files, start=1):
+        # Remove old numbering if exists
+        if " - " in f:
+            f = f.split(" - ", 1)[1]
+        file_list.insert(tk.END, f"{idx} - {f}")
+
+def select_files():
+    files = filedialog.askopenfilenames(filetypes=[("Excel files", "*.xlsx *.xlsm")])
+    if files:
+        for f in files:
+            # Avoid duplicates (ignoring numbering)
+            existing_files = [file_list.get(i).split(" - ", 1)[1] for i in range(file_list.size())]
+            if f not in existing_files:
+                file_list.insert(tk.END, f)
+        renumber_files()
+
+def remove_selected_file():
+    try:
+        selected_file_index = file_list.curselection()[0]
+        file_list.delete(selected_file_index)
+        renumber_files()
+    except IndexError:
+        messagebox.showwarning("No Selection", "Please select a file to remove.")
+
+def refresh_queries_and_links():
+    files = [file_list.get(i).split(" - ", 1)[1] for i in range(file_list.size())]
+    if not files:
+        messagebox.showwarning("No Files", "Please select Excel files first.")
+        return
+
+    progress_bar["value"] = 0
+    progress_bar["maximum"] = len(files)
+    status_label.config(text="0% completed")
+    root.update()
+
+    for index, f in enumerate(files):
+        try:
+            app = xw.App(visible=False)
+            wb = app.books.open(f)
+            wb.api.RefreshAll()
+            wb.api.UpdateLinks = 3
+            wb.save()
+            wb.close()
+            app.quit()
+
+            progress_bar["value"] = index + 1
+            percent = int(((index + 1) / len(files)) * 100)
+            status_label.config(text=f"{percent}% completed")
+            root.update()
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to refresh: {f}\n{str(e)}")
+            continue
+
+    status_label.config(text="100% completed")
+    messagebox.showinfo("Done", "All queries and workbook links refreshed successfully.")
+
+def show_info():
+    messagebox.showinfo("About", "FreshSheet\nEvery cell gets a breath of fresh air..\n\nDeveloped by: Eng. Ammar Haggag")
+
+# ------------------ GUI Setup ------------------
+root = tk.Tk()
+root.title("FreshSheet")
+root.geometry("650x580")
+root.configure(bg=BG_MAIN)
+
+# Top bar
+top_bar = tk.Frame(root, bg=BG_MAIN)
+top_bar.pack(fill="x", pady=5, padx=10)
+tk.Button(top_bar, text="About", command=show_info,
+          bg=BTN_PRIMARY, fg="white", font=("Segoe UI", 10, "bold")).pack(side="right")
+
+# File selection
+tk.Button(root, text="Select Excel Files", command=select_files,
+          bg=BTN_SUCCESS, fg="white", font=("Segoe UI", 10, "bold")).pack(pady=5)
+
+file_list = tk.Listbox(root, width=80, height=10,
+                       bg=BG_FRAME, fg=TEXT_COLOR, font=("Segoe UI", 9))
+file_list.pack(padx=10, pady=5)
+
+tk.Button(root, text="Remove Selected File", command=remove_selected_file,
+          bg=BTN_DANGER, fg="white", font=("Segoe UI", 10, "bold")).pack(pady=5)
+
+tk.Button(root, text="Refresh Queries & Links", command=refresh_queries_and_links,
+          bg=BTN_PRIMARY, fg="white", font=("Segoe UI", 10, "bold")).pack(pady=5)
+
+progress_bar = ttk.Progressbar(root, length=400, mode="determinate")
+progress_bar.pack(pady=5)
+
+status_label = tk.Label(root, text="0% completed", bg=BG_MAIN, fg=TEXT_COLOR, font=("Segoe UI", 10))
+status_label.pack(pady=5)
+
+# History section
+history_frame = tk.LabelFrame(root, text="History", bg=BG_MAIN, fg=TEXT_COLOR, font=("Segoe UI", 10, "bold"))
+history_frame.pack(fill="x", pady=10, padx=10)
+
+save_frame = tk.Frame(history_frame, bg=BG_MAIN)
+save_frame.pack(fill="x", pady=5)
+history_name_entry = tk.Entry(save_frame, font=("Segoe UI", 10), bg=BG_FRAME, fg=TEXT_COLOR)
+history_name_entry.pack(side="left", padx=5, fill="x", expand=True)
+tk.Button(save_frame, text="Save", command=save_current_as_history,
+          bg=BTN_PRIMARY, fg="white", font=("Segoe UI", 10, "bold")).pack(side="left", padx=5)
+
+dropdown_frame = tk.Frame(history_frame, bg=BG_MAIN)
+dropdown_frame.pack(fill="x", pady=5)
+history_var = tk.StringVar()
+history_dropdown = ttk.Combobox(dropdown_frame, textvariable=history_var, state="readonly", font=("Segoe UI", 10))
+history_dropdown.pack(side="left", padx=5, fill="x", expand=True)
+history_dropdown.bind("<<ComboboxSelected>>", load_selected_history)
+tk.Button(dropdown_frame, text="Delete", command=delete_selected_history,
+          bg=BTN_DANGER, fg="white", font=("Segoe UI", 10, "bold")).pack(side="left", padx=5)
+
+# Load history dropdown on startup
+refresh_history_dropdown()
+
+root.mainloop()
