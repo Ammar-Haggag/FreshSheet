@@ -35,7 +35,8 @@ def refresh_history_dropdown():
     history_dropdown["values"] = list(history_data.keys())
 
 def save_current_as_history():
-    files = list(file_list.get(0, tk.END))
+    # Strip numbering before saving
+    files = [file_list.get(i).split(" - ", 1)[1] for i in range(file_list.size())]
     if not files:
         messagebox.showwarning("No Files", "Please select files first.")
         return
